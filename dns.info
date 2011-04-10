@@ -1,6 +1,0 @@
-name = DNS Manager
-description = DNS Managemenet module
-core = 7.x
-package = "DNS"
-version = 0.1
-configure = admin/config/content/dns
