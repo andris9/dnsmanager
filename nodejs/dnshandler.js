@@ -1,4 +1,4 @@
-var DNSApi = require("./modules/dns.js").DNSApi,
+var dnslib = require("./DNS/dns-api.js"),
     urllib = require("url");
 
 module.exports = function(req, res){
@@ -25,16 +25,19 @@ module.exports = function(req, res){
                 list_domains(url.query.user, send.bind(this, req, res));
                 break;
             case "/api/dns/add":
-                add_domain(url.query.user, url.query.domain, send.bind(this, req, res));
+                add_domain(url.query.domain, url.query.user, send.bind(this, req, res));
                 break;
             case "/api/dns/remove":
-                remove_domain(url.query.user, url.query.domain, send.bind(this, req, res));
+                remove_domain(url.query.domain, url.query.user, send.bind(this, req, res));
                 break;
             case "/api/dns/records":
-                list_records(url.query.user, url.query.domain, send.bind(this, req, res));
+                list_records(url.query.domain, url.query.user, send.bind(this, req, res));
                 break;
             case "/api/dns/update":
-                update_records(url.query.user, url.query.domain, payload, send.bind(this, req, res));
+                add_record(url.query.domain, url.query.user, payload, send.bind(this, req, res));
+                break;
+            case "/api/dns/remove-record":
+                remove_record(url.query.domain, url.query.user, url.query.rid, send.bind(this, req, res));
                 break;
             default:
                 send(req, res, "Unknown service");
@@ -45,35 +48,42 @@ module.exports = function(req, res){
 
 
 function list_domains(owner, callback){
-    DNSApi.listDomains(owner, callback);
+    dnslib.zones.list(owner, callback);
 }
 
-function add_domain(owner, domain_name, callback){
+function add_domain(domain_name, owner, callback){
     if(!domain_name){
         return callback("Domain name not specified");
     }
-    DNSApi.addDomain(owner, domain_name, callback);
+    dnslib.zones.add(domain_name, owner, callback);
 }
 
-function remove_domain(owner, domain_name, callback){
+function remove_domain(domain_name, owner, callback){
     if(!domain_name){
         return callback("Domain name not specified");
     }
-    DNSApi.removeDomain(owner, domain_name, callback);
+    dnslib.zones.remove(domain_name, owner, callback);
 }
 
-function list_records(owner, domain_name, callback){
+function list_records(domain_name, owner, callback){
     if(!domain_name){
         return callback("Domain name not specified");
     }
-    DNSApi.listRecords(owner, domain_name, callback);
+    dnslib.records.list(domain_name, owner, callback);
 }
 
-function update_records(owner, domain_name, records, callback){
+function add_record(domain_name, owner, record, callback){
     if(!domain_name){
         return callback("Domain name not specified");
     }
-    DNSApi.updateRecords(owner, domain_name, records, callback);
+    dnslib.records.add(domain_name, owner, record, callback);
+}
+
+function remove_record(domain_name, owner, rid, callback){
+    if(!domain_name){
+        return callback("Domain name not specified");
+    }
+    dnslib.records.remove(domain_name, owner, rid, callback);
 }
 
 function send(req, res, err, data){

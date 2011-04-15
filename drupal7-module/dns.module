@@ -5,11 +5,11 @@ define("BOT_USERAGENT","MyBot/0.1");
 function dns_permission() {
     return array(
         'administer dns' => array(
-            'title' => t('Administer DNS Manager'), 
+            'title' => t('Administer DNS Manager'),
             'description' => t('Perform administration tasks for DNS module.'),
         ),
         'access dns' => array(
-            'title' => t('Access DNS contents'), 
+            'title' => t('Access DNS contents'),
             'description' => t('Use DNS Manager module.'),
         )
     );
@@ -72,7 +72,7 @@ function dns_menu() {
         'parent' => 'dns',
         'menu_name' => 'navigation'
     );
-    
+
     $items['dns/remove-record'] = array(
         'page callback' => 'dns_record_remove',
         'access arguments' => array('access dns'),
@@ -87,7 +87,7 @@ function dns_menu() {
 function dns_domain_list(){
     global $user;
 
-    $header = array(array("data"=>"#","width"=>"30"), t("Domain name"),array("data"=>"&nbsp;","width"=>"50"));
+    $header = array(array("data"=>"#","width"=>"30"), t("Zone name"),array("data"=>"&nbsp;","width"=>"50"));
     $rows = array();
 
     $domains = load_domains();
@@ -151,7 +151,7 @@ function dns_domain_edit(){
 
     $header = array(array("data"=>"#","width"=>"30"), t("Name"), t("Value"), array("data"=>"&nbsp;","width"=>"50"));
     $rows = array();
-    
+
     $tables = array(
         "A"=>"",
         "CNAME"=>"",
@@ -162,14 +162,14 @@ function dns_domain_edit(){
         $i=0;
         foreach($data as $type => $block){
             if(count($block)){
-                
+
                 $rows = array();
                 if(is_array($block)){
                 	foreach($block as $row){
                         $rows[] = array(
                             ++$i,
                             $row["name"],
-                            ($row["type"]=="MX"?intval($row["priority"])." ":"").$row["value"],
+                            ($type=="MX"?intval($row["value"][1])." ":"").$row["value"][0],
                             array(
                                 "data"=>l("Delete", "dns/remove-record",array(
                                     "query"=>array(
@@ -180,11 +180,11 @@ function dns_domain_edit(){
                                 "style"=>"text-align: center",
                                 "onclick"=>"return confirm('Are you sure?')"
                             )
-                            
+
                         );
                     }
-                    
-                	
+
+
                     if($i){
                     	$tables[$type] = theme_table(array(
                             "header"=>$header,
@@ -199,8 +199,8 @@ function dns_domain_edit(){
             }
     	}
     }
-    
-    $table = join("\n", $tables); 
+
+    $table = join("\n", $tables);
 
     $records_field = theme_fieldset(array(
         "element"=> array(
@@ -209,7 +209,7 @@ function dns_domain_edit(){
             "#children"=>$table
         )
     ));
-    
+
     $add_form = drupal_render(drupal_get_form("dns_record_add_form"));
 
     return $records_field.$add_form;
@@ -217,7 +217,7 @@ function dns_domain_edit(){
 
 function dns_record_add_form($form, &$form_state){
     $domain = trim($_GET["domain"]);
-    
+
     $form['general'] = array(
         '#type' => 'fieldset',
         '#title' => t('Add new record'),
@@ -225,15 +225,15 @@ function dns_record_add_form($form, &$form_state){
         "#collapsible"=>TRUE,
         "#collapsed"=>TRUE
     );
-    
+
     $form['general']['name'] = array(
         '#type' => 'textfield',
         '#title' => t('Name'),
         '#size' => 80,
-        '#description' => t('Hostname, for example <strong>subdomain.example.com</strong>'),
+        '#description' => t('Subdomain, for example <strong>www</strong>, unicode characters are allowed. Use <strong>@</strong> for '.$domain.'<br/>Regular expressions and <em>wildcards</em> are allowed. Enclose regular expressions in slashes (<code>/regexp+/</code>).'),
         '#required' => TRUE
     );
-    
+
     $form['general']['type'] = array(
         '#type' => 'select',
         '#title' => t('Type'),
@@ -242,7 +242,16 @@ function dns_record_add_form($form, &$form_state){
         '#description' => t('Select record type'),
         '#required' => TRUE
     );
-    
+
+    $form['general']['ttl'] = array(
+        '#type' => 'textfield',
+        '#title' => t('TTL'),
+        '#size' => 10,
+        '#default_value'=>"600",
+        '#description' => t('<em><b>T</b>ime <b>T</b>o <b>L</b>ive</em> value, min. 1'),
+        '#required' => FALSE
+    );
+
     $form['general']['priority'] = array(
         '#type' => 'textfield',
         '#title' => t('Priority (Mail server only)'),
@@ -250,13 +259,21 @@ function dns_record_add_form($form, &$form_state){
         '#description' => t('Mail server priority'),
         '#required' => FALSE
     );
-    
+
     $form['general']['value'] = array(
         '#type' => 'textfield',
         '#title' => t('Value'),
         '#size' => 80,
-        '#description' => t('Value, for example <strong>127.0.0.1</strong> for an IP address'),
+        '#description' => t('Value, for example <strong>127.0.0.1</strong> for an IP address.'),
         '#required' => TRUE
+    );
+
+    $form['general']['information'] = array(
+        '#markup'=> '<p><b>Wildcard support</b><br/>When using <em>wildcards</em> or regular expressions in the <em>name</em> field, substitutions for <em>value</em> can be used. '.
+                    'When using <em>wildcards</em>, <code>$1</code> indicates the whole match, <code>$2</code> first wildcard, <code>$3</code> second wildcard etc. '.
+                    'When using regular expressions, <code>$1</code> indicates the first capture group, <code>$2</code> second capture group etc.</p>'.
+                    '<p><b>For example</b><br/><em>Name:</em> <code>users.*</code>, <em>Value:</em> <code>$2.example.com</code> converts <code>users.<em>test</em>.'.$domain.'</code> to <code><em>test</em>.example.com</code>.<br/>'.
+                    '<em>Name:</em> <code>/^r/</code>, <em>Value:</em> <code>example.com</code> converts all subdomains beginning with <code>r</code> to <code>example.com</code>.</p>'
     );
 
     $form['general']['submit'] = array(
@@ -277,45 +294,35 @@ function dns_record_add_form_validate($form, &$form_state) {
         form_set_error('general][name', t('Name is required!'));
         $errors = true;
     }
-    
+
     if(!in_array($form_state['values']['type'], array("A", "CNAME", "NS", "MX"))){
         form_set_error('general][type', t('Type is required!'));
         $errors = true;
     }
 
-    // load current records
-    $records = load_domain_info($domain);
-    if($records===false){
-    	form_set_error(null, t('Error connecting to server #1'));
-    }elseif(!$errors){
-    	// id on vajalik massiivi elemendi hilisemaks tuvastamiseks
-        $records["_gen"] = $records["_gen"]?$records["_gen"]+1:1;
-        $id = $records["_gen"];
-        
-        $record = array(
-            "name"=> trim($form_state['values']['name']),
-            "type"=> trim($form_state['values']['type']),
-            "value"=> trim($form_state['values']['value']),
-            "id"=>$id
-        );
-        
-        if($record["type"]=="MX"){
-        	$record["priority"] = intval(trim($form_state['values']['priority']));
-        }
-        
-        $records[$form_state['values']['type']][] = $record;
-        
-        if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/update?user=".urlencode($user->name)."&domain=".urlencode($domain),json_encode($records))){
-            $response = @json_decode($data, true);
-            if($response["status"]!="OK" || !$response["data"]){
-                form_set_error(null, t('Error saving data'));
-            }
-            
-        }else{
-            form_set_error(null, t('Error connecting to server #2'));
-        }
-        
+    $ttl = abs(intval(trim($form_state['values']['type'])));
+
+    $record = array(
+        "name"=> trim($form_state['values']['name']),
+        "type"=> trim($form_state['values']['type']),
+        "ttl"=> $ttl?$ttl:60,
+        "value"=> array(trim($form_state['values']['value']))
+    );
+
+    if($record["type"]=="MX"){
+        $record["value"][] = intval(trim($form_state['values']['priority']));
     }
+
+    if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/update?user=".urlencode($user->name)."&domain=".urlencode($domain),json_encode($record))){
+        $response = @json_decode($data, true);
+        if($response["status"]!="OK" || !$response["data"]){
+            form_set_error(null, t('Error saving data'));
+        }
+
+    }else{
+        form_set_error(null, t('Error connecting to server'));
+    }
+
 }
 
 function dns_record_add_form_submit($form, &$form_state) {
@@ -336,40 +343,19 @@ function dns_record_remove(){
         	drupal_goto("dns/edit", array("query"=>array("domain"=>$domain)));
         }
     }
-    
-    // load current records
-    $records = load_domain_info($domain);
-    if($records===false){
-        drupal_set_message(t("Error loading domain data from server"), 'error');
-        drupal_goto("dns/edit", array("query"=>array("domain"=>$domain)));
-    }else{
-    	
-        if(is_array($records)){
-        	foreach($records as $type=>$block){
-        		if(is_array($block)){
-        			foreach($block as $key=>$row){
-                        if($row["id"]==$record){
-                        	unset($records[$type][$key]);
-                        }
-                    }
-                    $records[$type] = array_merge($records[$type]);
-        		}
-        	}
-        }
-        
-        if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/update?user=".urlencode($user->name)."&domain=".urlencode($domain),json_encode($records))){
-            $response = @json_decode($data, true);
-            if($response["status"]!="OK" || !$response["data"]){
-                drupal_set_message(t("Error saving data"), 'error');
-                drupal_goto("dns/edit", array("query"=>array("domain"=>$domain)));
-            }
-            
-        }else{
-            drupal_set_message(t("Error connecting to server"), 'error');
+
+    if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/remove-record?user=".urlencode($user->name)."&domain=".urlencode($domain)."&rid=".urlencode($record))){
+        $response = @json_decode($data, true);
+        if($response["status"]!="OK" || !$response["data"]){
+            drupal_set_message(t("Error saving data"), 'error');
             drupal_goto("dns/edit", array("query"=>array("domain"=>$domain)));
         }
+
+    }else{
+        drupal_set_message(t("Error connecting to server"), 'error');
+        drupal_goto("dns/edit", array("query"=>array("domain"=>$domain)));
     }
-    
+
     drupal_set_message(t("Record removed"));
     drupal_goto("dns/edit", array("query"=>array("domain"=>$domain)));
 }
@@ -377,15 +363,15 @@ function dns_record_remove(){
 function dns_domain_add_form($form, &$form_state){
     $form['dns_domain_name'] = array(
         '#type' => 'textfield',
-        '#title' => t('Domain name'),
+        '#title' => t('Zone name'),
         '#size' => 80,
-        '#description' => t('The name of the domain'),
+        '#description' => t('The name of the zone (domain), unicode characters are allowed'),
         '#required' => TRUE
     );
 
     $form['submit'] = array(
         '#type' => 'submit',
-        '#value' => t('Add domain'),
+        '#value' => t('Add zone'),
     );
 
     return $form;
@@ -476,7 +462,7 @@ function load_from_url($url, $postBody = false){
     	$options[CURLOPT_POST] = true;
         $options[CURLOPT_POSTFIELDS] = $postBody;
     }
-    
+
     curl_setopt_array($ch, $options);
     $content = curl_exec($ch);
     $err     = curl_errno($ch);
