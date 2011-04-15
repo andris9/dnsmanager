@@ -46,26 +46,26 @@ module.exports = function(){
             
             dnsapi.resolve(data.name, data.typeName, req.rinfo.address, function(err, records){
                 
-                records.answer.forEach(function(record){
+                records.answer && records.answer.forEach(function(record){
                     res.addRR.apply(res, getValue(records, record));
                     res.header.ancount += 1;
                     res.header.aa += 1;
                 });
                 
-                records.additional.forEach(function(record){
-                    res.addRR.apply(res, getValue(records, record));
-                    res.header.arcount += 1;
-                    res.header.aa += 1;
-                });
-                
-                records.authority.forEach(function(record){
+                records.authority && records.authority.forEach(function(record){
                     res.addRR.apply(res, getValue(records, record));
                     res.header.nscount += 1;
                     res.header.aa += 1;
                 });
+                
+                records.additional && records.additional.forEach(function(record){
+                    res.addRR.apply(res, getValue(records, record));
+                    res.header.arcount += 1;
+                    res.header.aa += 1;
+                });
                
                 if(req.q.length>=req_i){
-                    if(!records.answer.length){
+                    if(!records.answer || records.answer.length){
                         res.header.rcode = ndns.ns_rcode.nxdomain;
                     }
                     res.send();

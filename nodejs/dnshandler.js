@@ -90,7 +90,7 @@ function send(req, res, err, data){
     
     res.setHeader("Content-type","application/json; charset=utf-8");
     if(err){
-        res.writeHead(500);
+        res.writeHead(200);
         res.end(JSON.stringify({"status": "error", "errormsg": err.message || err}));
         return;
     }

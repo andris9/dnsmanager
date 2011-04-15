@@ -128,7 +128,7 @@ function dns_domain_delete(){
     if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/remove?user=".urlencode($user->name)."&domain=".urlencode($domain))){
         $response = @json_decode($data, true);
         if($response["status"]!="OK" || !$response["data"]){
-            form_set_error('dns_domain_name', t('Can\'t delete this domain - domain already removed or not listed'));
+            form_set_error('dns_domain_name', $response["errormsg"]?$response["errormsg"]:t('Can\'t delete this domain - domain already removed or not listed'));
         }else{
         	drupal_set_message(t("Domain removed"));
         }
@@ -325,7 +325,7 @@ function dns_record_add_form_validate($form, &$form_state) {
     	}
     }
     
-    $ttl = abs(intval(trim($form_state['values']['type'])));
+    $ttl = abs(intval(trim($form_state['values']['ttl'])));
 
     $record = array(
         "name"=> $name,
@@ -342,7 +342,7 @@ function dns_record_add_form_validate($form, &$form_state) {
         if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/update?user=".urlencode($user->name)."&domain=".urlencode($domain),json_encode($record))){
             $response = @json_decode($data, true);
             if($response["status"]!="OK" || !$response["data"]){
-                form_set_error(null, t('Error saving data'));
+                form_set_error(null, $response["errormsg"]?$response["errormsg"]:t('Error saving data'));
             }
     
         }else{
@@ -374,7 +374,7 @@ function dns_record_remove(){
     if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/remove-record?user=".urlencode($user->name)."&domain=".urlencode($domain)."&rid=".urlencode($record))){
         $response = @json_decode($data, true);
         if($response["status"]!="OK" || !$response["data"]){
-            drupal_set_message(t("Error saving data"), 'error');
+            drupal_set_message($response["errormsg"]?$response["errormsg"]:t("Error saving data"), 'error');
             drupal_goto("dns/edit", array("query"=>array("domain"=>$domain)));
         }
 
@@ -425,10 +425,10 @@ function dns_domain_add_form_validate($form, &$form_state) {
         if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/add?user=".urlencode($user->name)."&domain=".urlencode($domain))){
             $response = @json_decode($data, true);
             if($response["status"]!="OK" || !$response["data"]){
-                form_set_error('dns_domain_name', t('This domain name is already listed on the system'));
+                form_set_error('dns_domain_name', $response["errormsg"]?$response["errormsg"]:t('This domain name is already listed on the system'));
             }
         }else{
-        	form_set_error('dns_domain_name', t('Failed to check domain name'));
+        	form_set_error(null, t('Failed to check domain name'));
         }
     }
 

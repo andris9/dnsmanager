@@ -11,12 +11,20 @@ module.exports = dnsapi = {
 
         add: function(zone_name, owner, callback){
             zone_name = punycode.ToUnicode(zone_name.trim().toLowerCase());
-            this.get(zone_name, (function(err, zone){
+
+            if(zone_name.match(/[^\w\.\-]/)){
+                return callback(new Error("Invalid characters in name"));
+            }
+
+            this.find(zone_name, (function(err, zone){
                 if(err){
                     return callback(err);
                 }
+                
                 if(zone){
-                    return callback(null, false);
+                    if(zone._id==zone_name || zone.owner != owner){
+                        return callback(new Error("This domain name is already listed in the system"));
+                    }
                 }
                 dnsapi.db.openCollection("zones", function(err, collection){
                     collection.insert({
@@ -131,7 +139,7 @@ module.exports = dnsapi = {
                 if(err){
                     return callback(err);
                 }
-                collection.findAndModify({_id: zone_name, owner: owner}, [], {$set:{records:records}},{}, function(err, zone){
+                collection.findAndModify({_id: zone_name, owner: owner}, [], {$set:{records:records, updated: new Date()}},{}, function(err, zone){
                     if(err){
                         return callback(err);
                     }
@@ -154,6 +162,12 @@ module.exports = dnsapi = {
             var record = normalizeRecord(name, zone_name, value);
             if(!record || !name){
                 return callback(new Error("Invalid name"));
+            }
+            
+            if(name.charAt(0)!="/" || name.charAt(name.length-1)!="/"){
+                if(name.match(/[^\w\.\-\*]/)){
+                    return callback(new Error("Invalid characters in name"));
+                }
             }
             
             record.ttl = ttl;
@@ -243,6 +257,12 @@ module.exports = dnsapi = {
             var record = normalizeRecord(name, zone_name, value);
             if(!record || !name){
                 return callback(new Error("Invalid name"));
+            }
+            
+            if(name.charAt(0)!="/" || name.charAt(name.length-1)!="/"){
+                if(name.match(/[^\w\.\-\*]/)){
+                    return callback(new Error("Invalid characters in name"));
+                }
             }
             
             if(countries){
