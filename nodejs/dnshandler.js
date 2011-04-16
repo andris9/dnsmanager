@@ -25,7 +25,10 @@ module.exports = function(req, res){
                 list_domains(url.query.user, send.bind(this, req, res));
                 break;
             case "/api/dns/add":
-                add_domain(url.query.domain, url.query.user, send.bind(this, req, res));
+                add_domain(url.query.domain, url.query.user, {
+                        fname: url.query.fname, 
+                        lname: url.query.lname
+                    }, send.bind(this, req, res));
                 break;
             case "/api/dns/remove":
                 remove_domain(url.query.domain, url.query.user, send.bind(this, req, res));
@@ -51,11 +54,11 @@ function list_domains(owner, callback){
     dnslib.zones.list(owner, callback);
 }
 
-function add_domain(domain_name, owner, callback){
+function add_domain(domain_name, owner, options, callback){
     if(!domain_name){
         return callback("Domain name not specified");
     }
-    dnslib.zones.add(domain_name, owner, callback);
+    dnslib.zones.add(domain_name, owner, options, callback);
 }
 
 function remove_domain(domain_name, owner, callback){

@@ -3,16 +3,20 @@ var mongo = require("mongodb"),
     ip2country = require("./IP/ip2country"),
     utillib = require("util");
 
+var default_ns = ["ns11.node.ee", "ns22.node.ee"];
+
 module.exports = dnsapi = {
     
     allowed_types: ["A", "AAAA", "CNAME", "MX", "NS", "SRV"],
     
     zones: {
 
-        add: function(zone_name, owner, callback){
+        add: function(zone_name, owner, options, callback){
             zone_name = punycode.ToUnicode(zone_name.trim().toLowerCase());
 
-            if(zone_name.match(/[^\w\.\-]/)){
+            options = options || {};
+
+            if(zone_name.match(/[^\w\.\-\u0081-\uFFFF]/)){
                 return callback(new Error("Invalid characters in name"));
             }
 
@@ -31,7 +35,28 @@ module.exports = dnsapi = {
                             _id: zone_name,
                             owner: owner,
                             created: new Date(),
-                            updated: new Date()
+                            updated: new Date(),
+                            whois:{
+                                fname: options.fname || "",
+                                lname: options.lname || ""
+                            },
+                            _gen: 2,
+                            records: {
+                                NS: [
+                                    {
+                                        name: zone_name,
+                                        ttl: 600,
+                                        id: 1,
+                                        value: [default_ns[0]]
+                                    },
+                                    {
+                                        name: zone_name,
+                                        ttl: 600,
+                                        id: 2,
+                                        value: [default_ns[1]]
+                                    }
+                                ]
+                            }
                         }, function(err, docs){
                             if(err){
                                 return callback(err);
@@ -165,7 +190,7 @@ module.exports = dnsapi = {
             }
             
             if(name.charAt(0)!="/" || name.charAt(name.length-1)!="/"){
-                if(name.match(/[^\w\.\-\*@]/)){
+                if(name.match(/[^\w\.\-\*@\u0081-\uFFFF]/)){
                     return callback(new Error("Invalid characters in name"));
                 }
             }
@@ -260,7 +285,7 @@ module.exports = dnsapi = {
             }
             
             if(name.charAt(0)!="/" || name.charAt(name.length-1)!="/"){
-                if(name.match(/[^\w\.\-\*]/)){
+                if(name.match(/[^\w\.\-\*\u0081-\uFFFF]/)){
                     return callback(new Error("Invalid characters in name"));
                 }
             }

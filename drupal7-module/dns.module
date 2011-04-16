@@ -84,8 +84,41 @@ function dns_menu() {
     return $items;
 }
 
+function dns_form_user_register_form_alter(&$form, &$form_state, $form_id) {
+  // Modification for the form with the given form ID goes here. For example, if
+  // FORM_ID is "user_register_form" this code would run only on the user
+  // registration form.
+
+    $form['first_name'] = array(
+        '#type' => 'textfield',
+        '#title' => t('First Name'),
+        '#size' => 80,
+        '#description' => t('Provide Your first name'),
+        '#required' => TRUE
+    );
+    
+    $form['last_name'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Last Name'),
+        '#size' => 80,
+        '#description' => t('Provide Your last name'),
+        '#required' => TRUE
+    );
+}
+
+function dns_user_presave(&$edit, $account, $category) {
+    if (isset($edit['first_name'])) {
+        $edit['data']['first_name'] = $edit['first_name'];
+    }
+    if (isset($edit['last_name'])) {
+        $edit['data']['last_name'] = $edit['last_name'];
+    }
+}
+
 function dns_domain_list(){
     global $user;
+
+    //echo "<pre>".print_r($user,1)."</pre>";
 
     $header = array(array("data"=>"#","width"=>"30"), t("Zone name"),array("data"=>"&nbsp;","width"=>"50"));
     $rows = array();
@@ -426,7 +459,7 @@ function dns_domain_add_form_validate($form, &$form_state) {
     }
     
     if(!$errors){
-        if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/add?user=".urlencode($user->name)."&domain=".urlencode($domain))){
+        if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/add?user=".urlencode($user->name)."&fname=".urlencode($user->data["first_name"])."&lname=".urlencode($user->data["last_name"])."&domain=".urlencode($domain))){
             $response = @json_decode($data, true);
             if($response["status"]!="OK" || !$response["data"]){
                 form_set_error('dns_domain_name', $response["errormsg"]?$response["errormsg"]:t('This domain name is already listed on the system'));

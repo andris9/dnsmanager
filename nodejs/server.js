@@ -11,9 +11,9 @@ var https = require('https'),
 
 process.on('uncaughtException',function(err){
     try{
-        console.log("Unexpected Error\n"+err.message)
+        console.log("Unexpected Error\n"+err.message+"\n"+err.stack);
         log("error", "["+Date()+"] Unexpected Error "+err.message);
-    }catch(E){
+   }catch(E){
         console.log("Catastrophic failure!")
     }
 });
