@@ -5,7 +5,7 @@ var mongo = require("mongodb"),
 
 module.exports = dnsapi = {
     
-    allowed_types: ["A", "AAAA", "CNAME", "MX", "NS"],
+    allowed_types: ["A", "AAAA", "CNAME", "MX", "NS", "SRV"],
     
     zones: {
 
@@ -154,7 +154,7 @@ module.exports = dnsapi = {
             
             var name = options.name || "",
                 ttl = Math.abs(Number(options.ttl) || 600),
-                value = options.value || "",
+                value = options.value || "",
                 countries = options.countries || false;
                 
             name = punycode.ToUnicode(name);
@@ -165,7 +165,7 @@ module.exports = dnsapi = {
             }
             
             if(name.charAt(0)!="/" || name.charAt(name.length-1)!="/"){
-                if(name.match(/[^\w\.\-\*]/)){
+                if(name.match(/[^\w\.\-\*@]/)){
                     return callback(new Error("Invalid characters in name"));
                 }
             }
@@ -244,10 +244,10 @@ module.exports = dnsapi = {
             options = options || {};
             zone_name = punycode.ToUnicode(zone_name.trim().toLowerCase());
             
-            var name = punycode.ToUnicode(options.name || ""),
-                type = (options.type || "").trim().toUpperCase(),
+            var name = punycode.ToUnicode(options.name || ""),
+                type = (options.type || "").trim().toUpperCase(),
                 ttl = Math.abs(Number(options.ttl) || 600),
-                value = options.value || "",
+                value = options.value || "",
                 countries = options.countries || false;
             
             if(dnsapi.allowed_types.indexOf(type)<0){
@@ -385,6 +385,14 @@ module.exports = dnsapi = {
             // MX
             if(type=="MX" || type=="ANY"){
                 data = this.check_type("MX", hostname, country, zone.records, type!="ANY");
+                if(data.length){
+                    response.answer = response.answer.concat(data);
+                }
+            }
+            
+            // SRV
+            if(type=="SRV" || type=="ANY"){
+                data = this.check_type("SRV", hostname, country, zone.records, type!="ANY");
                 if(data.length){
                     response.answer = response.answer.concat(data);
                 }
@@ -536,7 +544,3 @@ function normalizeRecord(name, zone_name, value){
     
     return result;
 }
-
-
-
-

@@ -5,7 +5,8 @@ var https = require('https'),
     config = require("./config"),
     static_handler = require("./static"),
     punycode = require("./modules/punycode"),
-    dns_server = require("./DNS/dns-server"),
+    start_dns_server = require("./DNS/dns-server"),
+    start_whois_server = require("./DNS/whois-server"),
     dns_api = require("./dnshandler");
 
 process.on('uncaughtException',function(err){
@@ -18,7 +19,8 @@ process.on('uncaughtException',function(err){
 });
 
 http.createServer(webserver).listen(80, HTTP_Ready);
-dns_server();
+start_dns_server();
+start_whois_server();
 
 function HTTP_Ready(err){
     if(err){

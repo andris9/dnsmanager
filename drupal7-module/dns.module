@@ -147,16 +147,18 @@ function dns_domain_edit(){
     $time_end = microtime(true);
     $time = $time_end - $time_start;
 
-    $types = array("A"=>"IP address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server");
+    $types = array("A"=>"IP address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description");
 
     $header = array(array("data"=>"#","width"=>"30"), t("Name"), t("TTL"), t("Value"), array("data"=>"&nbsp;","width"=>"50"));
     $rows = array();
 
     $tables = array(
         "A"=>"",
+        "AAAA"=>"",
         "CNAME"=>"",
         "MX"=>"",
-        "NS"=>""
+        "NS"=>"",
+        "SRV"=>""
     );
     if($data){
         $i=0;
@@ -166,11 +168,13 @@ function dns_domain_edit(){
                 $rows = array();
                 if(is_array($block)){
                 	foreach($block as $row){
+                        $srv = array_pop($row["value"]);
+                        array_unshift($row["value"], $srv);
                         $rows[] = array(
                             ++$i,
                             htmlspecialchars($row["name"]),
                             intval($row["ttl"]),
-                            ($type=="MX"?intval($row["value"][1])." ":"").htmlspecialchars($row["value"][0]),
+                            join(" ", $row["value"]),
                             array(
                                 "data"=>l("Delete", "dns/remove-record",array(
                                     "query"=>array(
@@ -238,7 +242,7 @@ function dns_record_add_form($form, &$form_state){
     $form['general']['type'] = array(
         '#type' => 'select',
         '#title' => t('Type'),
-        '#options' => array("A"=>"IP address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server"),
+        '#options' => array("A"=>"IP address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description"),
         '#default_value'=>"A",
         '#description' => t('Select record type'),
         '#required' => TRUE
@@ -255,9 +259,9 @@ function dns_record_add_form($form, &$form_state){
 
     $form['general']['priority'] = array(
         '#type' => 'textfield',
-        '#title' => t('Priority (Mail server only)'),
+        '#title' => t('Priority or port'),
         '#size' => 10,
-        '#description' => t('Mail server priority'),
+        '#description' => t('Mail server priority or Service description port'),
         '#required' => FALSE
     );
 
@@ -296,7 +300,7 @@ function dns_record_add_form_validate($form, &$form_state) {
         $errors = true;
     }
 
-    if(!in_array($form_state['values']['type'], array("A", "CNAME", "NS", "MX"))){
+    if(!in_array($form_state['values']['type'], array("A", "CNAME", "NS", "MX", "SRV"))){
         form_set_error('type', t('Type is required!'));
         $errors = true;
     }
@@ -305,14 +309,14 @@ function dns_record_add_form_validate($form, &$form_state) {
     
     $name = trim($form_state['values']['name']);
     if(substr($name,0,1)!="/" || substr($name,-1)!="/"){
-        if(mb_ereg_match(".*[^[:alnum:]\.\-\*]", $name)){
+        if(mb_ereg_match(".*[^[:alnum:]\.\-\*_@]", $name)){
             form_set_error('name', t('Name includes illegal characters!'));
             $errors = true;
         }	
     }
     
     $value = trim($form_state['values']['value']);
-    if(mb_ereg_match('.*[^[:alnum:]\.\-\*\$]', $value)){
+    if(mb_ereg_match('.*[^[:alnum:]\.\-\*\$@]', $value)){
         form_set_error('value', t('Value includes illegal characters!'));
         $errors = true;
     }
@@ -334,7 +338,7 @@ function dns_record_add_form_validate($form, &$form_state) {
         "value"=> array($value)
     );
 
-    if($record["type"]=="MX"){
+    if($record["type"]=="MX" || $record["type"]=="SRV"){
         $record["value"][] = abs(intval(trim($form_state['values']['priority'])));
     }
 

@@ -65,7 +65,7 @@ module.exports = function(){
                 });
                
                 if(req.q.length>=req_i){
-                    if(!records.answer || records.answer.length){
+                    if(!records.answer || !records.answer.length){
                         res.header.rcode = ndns.ns_rcode.nxdomain;
                     }
                     res.send();
@@ -104,13 +104,20 @@ module.exports = function(){
             case "MX":
                 value = [record.record.value[1] || 10, punycode.ToASCII(record.record.value[0].replace("@", records.hostname) || "")];
                 break;
+            case "SRV":
+                value = [0, 0, record.record.value[1] || 10, punycode.ToASCII(record.record.value[0].replace("@", records.hostname) || "")];
+                break;
         }
         //[data.name, 60, ns_c["in"], ns_t.a, domain.records["A"][i].value
         value.unshift(ns_t[record.record.type.toLowerCase()]);
         value.unshift(ns_c["in"]);
         value.unshift(record.record.ttl || 600);
-        value.unshift(punycode.ToASCII(name));
-        
+        if(record.record.type!="SRV"){
+            value.unshift(punycode.ToASCII(name));
+        }else{
+            // SRV records include _ symbols
+            value.unshift(name);
+        }
         return value;
     }
     

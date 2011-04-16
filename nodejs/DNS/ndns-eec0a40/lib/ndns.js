@@ -1427,6 +1427,21 @@ DNSParser.prototype.parseMX = function (mx) {
     return mx;
 };
 
+DNSParser.prototype.parseSRV = function (srv) {
+    srv.priority = this.parseUInt16();
+    srv.weight = this.parseUInt16();
+    srv.port = this.parseUInt16();
+    srv.exchange = this.parseName();
+
+    srv[0] = srv.priority;
+    srv[1] = srv.weight;
+    srv[2] = srv.port;
+    srv[3] = srv.exchange;
+    srv.length = 4;
+
+    return srv;
+};
+
 DNSParser.prototype.parseAAAA = function () {
     if (this.parseStart + 16 > this.parseEnd)
 	throw new Error();
@@ -1498,6 +1513,9 @@ DNSParser.prototype.parseRR = function (rr) {
 	rr.rdata.aaaa = this.parseAAAA();
 	rr.rdata[0] = rr.rdata.aaaa;
 	break;
+	case 33: // srv
+    this.parseSRV(rr.rdata);
+    break;
     default:
 	rr.rdata[0] = this.buf.slice(this.parseStart, this.parseEnd);
 	this.parseStart = this.parseEnd;
@@ -1761,6 +1779,13 @@ DNSWriter.prototype.writeMX = function (mx) {
     this.writeName(mx[1]); // exchange
 };
 
+DNSWriter.prototype.writeSRV = function (srv) {
+    this.writeUInt16(srv[0]); // priority
+    this.writeUInt16(srv[1]); // weight
+    this.writeUInt16(srv[2]); // port
+    this.writeName(srv[3]); // exchange
+};
+
 DNSWriter.prototype.writeAAAA = function (aaaa) {
     if (this.truncate)
 	return;
@@ -1817,6 +1842,9 @@ DNSWriter.prototype.writeRR = function (rr) {
     }
     else if (rr.type == 28) { // aaaa
 	this.writeAAAA(rr.rdata[0]);
+    }
+    else if (rr.type == 33) { // srv
+    this.writeSRV(rr.rdata);
     }
     else {
 	if (typeof rr.rdata[0] === 'string')
