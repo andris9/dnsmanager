@@ -3,7 +3,8 @@ var mongo = require("mongodb"),
     ip2country = require("./IP/ip2country"),
     utillib = require("util");
 
-var default_ns = ["ns11.node.ee", "ns22.node.ee"];
+var default_ns = ["ns11.node.ee", "ns22.node.ee"],
+    forward_host = "forwarder.node.ee";
 
 module.exports = dnsapi = {
     
@@ -415,6 +416,18 @@ module.exports = dnsapi = {
                 if(data.length){
                     response.answer = response.answer.concat(data);
                 }
+            }
+            
+            // WEBFWD
+            data = this.dig_records("WEBFWD", hostname, country, zone);
+            if(data.length){
+                if(type!="WEBFWD"){
+                    data.forEach(function(record){
+                        record.record.type = "CNAME";
+                        record.record.value[0] = forward_host; 
+                    });
+                }
+                response.answer = response.answer.concat(data);
             }
             
             // AAAA
