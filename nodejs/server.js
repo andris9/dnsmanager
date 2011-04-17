@@ -58,47 +58,57 @@ function redirect(req, res){
     res.end();
 }
 
-function webserver(req, res){
-    forwarder(req, res, function(err, status){
-        var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.connection.socket.remoteAddress;
+function c_webserver(req, res, data){
+    var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.connection.socket.remoteAddress;
+
+    if(config.deny.url.indexOf(req.url)>=0 || config.deny.ip.indexOf(ip)>=0){
+        res.writeHead(410);
+        res.end();
+        return;
+    }
     
-        if(config.deny.url.indexOf(req.url)>=0 || config.deny.ip.indexOf(ip)>=0){
-            res.writeHead(410);
-            res.end();
-            return;
-        }
-        
-        if(req.url.match(/^\/api\/dns/)){
+    if(req.url.match(/^\/api\/dns/)){
+        log("access","["+Date()+"] 200 to "+ip+" from "+req.url);
+        return dns_api(req, res, data);
+    }
+    
+    if(req.url=="/dnsmanager"){
+        req.url = "/dnsmanager.html";
+    }
+    
+    if(req.url=="/"){
+        log("access","["+Date()+"] 200 to "+ip+" from "+req.url);
+        res.setHeader("Content-type","text/html; charset=utf-8");
+        res.writeHead(200);
+        res.end("<!doctype html><html><head><title>"+(punycode.ToUnicode(req.headers.host) || "node.ee")+"</title><meta charset=\"utf-8\"><style type=\"text/css\">body{font-family: Helvetica, Arial, Sans-serif;}</style></head><body><p>hi!</p><p><b>"+(punycode.ToUnicode(req.headers.host) || "node.ee")+"</b> is a <a href=\"http://nodejs.org\">node.js</a> instance ("+process.version+", "+process.getuid()+":"+process.getgid()+")</p></body></html>");
+        return;
+    }
+    
+    if(!req.url.match(/\.\./)){
+        static_handler.serve(req, res, config.directories["static"]+req.url, function(err){
+            if(err){
+                return log("error","["+Date()+"] 404 to "+ip+" from "+req.url);
+            }
             log("access","["+Date()+"] 200 to "+ip+" from "+req.url);
-            return dns_api(req, res);
-        }
-        
-        if(req.url=="/dnsmanager"){
-            req.url = "/dnsmanager.html";
-        }
-        
-        if(req.url=="/"){
-            log("access","["+Date()+"] 200 to "+ip+" from "+req.url);
-            res.setHeader("Content-type","text/html; charset=utf-8");
-            res.writeHead(200);
-            res.end("<!doctype html><html><head><title>"+(punycode.ToUnicode(req.headers.host) || "node.ee")+"</title><meta charset=\"utf-8\"><style type=\"text/css\">body{font-family: Helvetica, Arial, Sans-serif;}</style></head><body><p>hi!</p><p><b>"+(punycode.ToUnicode(req.headers.host) || "node.ee")+"</b> is a <a href=\"http://nodejs.org\">node.js</a> instance ("+process.version+", "+process.getuid()+":"+process.getgid()+")</p></body></html>");
-            return;
-        }
-        
-        if(!req.url.match(/\.\./)){
-            static_handler.serve(req, res, config.directories["static"]+req.url, function(err){
-                if(err){
-                    return log("error","["+Date()+"] 404 to "+ip+" from "+req.url);
-                }
-                log("access","["+Date()+"] 200 to "+ip+" from "+req.url);
-            });
-            return;
-        }else{
-            log("error","["+Date()+"] 404 to "+ip+" from "+req.url);
-            res.writeHead(404);
-            res.end("not found\n");
-            return;
-        }        
+        });
+        return;
+    }else{
+        log("error","["+Date()+"] 404 to "+ip+" from "+req.url);
+        res.writeHead(404);
+        res.end("not found\n");
+        return;
+    }    
+}
+
+function webserver(req, res){
+    var data = "";
+    req.on("data", function(chunk){
+        data += chunk.toString("utf-8");
+    });
+    req.on("end", function(){
+        forwarder(req, res, function(err, status){
+            c_webserver(req, res, data);
+        });
     });
 }
 

@@ -1,14 +1,8 @@
 var dnslib = require("./DNS/dns-api.js"),
     urllib = require("url");
 
-module.exports = function(req, res){
-    
-    var data = "";
-    req.on("data", function(chunk){
-        data += chunk.toString("utf-8");
-    });
-    
-    req.on("end", function(chunk){
+module.exports = function(req, res, data){
+        
         var url = urllib.parse(req.url, true);
         
         if(!url.query.user){
@@ -45,9 +39,7 @@ module.exports = function(req, res){
             default:
                 send(req, res, "Unknown service");
         }        
-    });
-    
-}
+    }
 
 
 function list_domains(owner, callback){
