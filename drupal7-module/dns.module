@@ -180,7 +180,7 @@ function dns_domain_edit(){
     $time_end = microtime(true);
     $time = $time_end - $time_start;
 
-    $types = array("A"=>"IP address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description");
+    $types = array("A"=>"IPv4 address","AAAA"=>"IPv6 address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description");
 
     $header = array(array("data"=>"#","width"=>"30"), t("Name"), t("TTL"), t("Value"), array("data"=>"&nbsp;","width"=>"50"));
     $rows = array();
@@ -194,10 +194,10 @@ function dns_domain_edit(){
         "SRV"=>""
     );
     if($data){
-        $i=0;
+        
         foreach($data as $type => $block){
             if(count($block)){
-
+                $i=0;
                 $rows = array();
                 if(is_array($block)){
                 	foreach($block as $row){
@@ -205,18 +205,18 @@ function dns_domain_edit(){
                         array_unshift($row["value"], $srv);
                         $rows[] = array(
                             ++$i,
-                            htmlspecialchars($row["name"]),
+                            htmlspecialchars($row["name"]!="@"?$row["name"]:$domain),
                             intval($row["ttl"]),
                             join(" ", $row["value"]),
                             array(
-                                "data"=>l("Delete", "dns/remove-record",array(
+                                "data"=>$row["frozen"]?"<em>Informational</em>":l("Delete", "dns/remove-record",array(
                                     "query"=>array(
                                         "row"=>intval($row["id"]),
                                         "domain"=>htmlspecialchars($domain)
                                     )
                                 )),
                                 "style"=>"text-align: center",
-                                "onclick"=>"return confirm('Are you sure?')"
+                                "onclick"=>$row["frozen"]?"":"return confirm('Are you sure?')"
                             )
 
                         );
@@ -268,6 +268,7 @@ function dns_record_add_form($form, &$form_state){
         '#type' => 'textfield',
         '#title' => t('Name'),
         '#size' => 80,
+        '#default_value'=>"@",
         '#description' => t('Subdomain, for example <strong>www</strong>, unicode characters are allowed. Use <strong>@</strong> for '.htmlspecialchars($domain).'<br/>Regular expressions and <em>wildcards</em> are allowed. Enclose regular expressions in slashes (<code>/regexp+/</code>).'),
         '#required' => TRUE
     );
@@ -285,7 +286,7 @@ function dns_record_add_form($form, &$form_state){
         '#type' => 'textfield',
         '#title' => t('TTL'),
         '#size' => 10,
-        '#default_value'=>"600",
+        '#default_value'=>"60",
         '#description' => t('<em><b>T</b>ime <b>T</b>o <b>L</b>ive</em> value, min. 1'),
         '#required' => FALSE
     );
@@ -302,7 +303,7 @@ function dns_record_add_form($form, &$form_state){
         '#type' => 'textfield',
         '#title' => t('Value'),
         '#size' => 80,
-        '#description' => t('Value, for example <strong>127.0.0.1</strong> for an IP address.'),
+        '#description' => t('Value, for example <strong>127.0.0.1</strong> or an IPv6 address.'),
         '#required' => TRUE
     );
 
@@ -333,7 +334,7 @@ function dns_record_add_form_validate($form, &$form_state) {
         $errors = true;
     }
 
-    if(!in_array($form_state['values']['type'], array("A", "CNAME", "NS", "MX", "SRV"))){
+    if(!in_array($form_state['values']['type'], array("A", "AAAA", "CNAME", "NS", "MX", "SRV"))){
         form_set_error('type', t('Type is required!'));
         $errors = true;
     }
@@ -349,17 +350,25 @@ function dns_record_add_form_validate($form, &$form_state) {
     }
     
     $value = trim($form_state['values']['value']);
-    if(mb_ereg_match('.*[^[:alnum:]\.\-\*\$@]', $value)){
+    if(mb_ereg_match('.*[^[:alnum:]\.\-\*\:\$@]', $value)){
         form_set_error('value', t('Value includes illegal characters!'));
         $errors = true;
     }
     
     $type = strtoupper(trim($form_state['values']['type'])); 
     if($type=="A"){
-    	if(!preg_match('/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $value)){
-    		form_set_error('value', t('Value must be IP formatted (xxx.xxx.xxx.xxx)'));
-            $errors = true;
-    	}
+        //.match(/^(?:[a-f0-9]{0,4}:){4,}[a-f0-9]{0,4}$/)
+        $value = strtolower($value);
+        $ip4 = $ip6 = false;
+        
+        if(!($ip4 = !!preg_match('/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $value)) && 
+           !($ip6 = !!preg_match('/^(?:[a-f0-9]{0,4}:){4,}[a-f0-9]{0,4}$/', $value))){
+                form_set_error('value', t('Invalid IP address'));
+                $errors = true;
+           };
+        if($ip6){
+        	$type="AAAA";
+        }
     }
     
     $ttl = abs(intval(trim($form_state['values']['ttl'])));
@@ -378,6 +387,7 @@ function dns_record_add_form_validate($form, &$form_state) {
     if(!$errors){
         if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/update?user=".urlencode($user->name)."&domain=".urlencode($domain),json_encode($record))){
             $response = @json_decode($data, true);
+
             if($response["status"]!="OK" || !$response["data"]){
                 form_set_error(null, $response["errormsg"]?$response["errormsg"]:t('Error saving data'));
             }

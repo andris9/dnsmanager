@@ -97,6 +97,11 @@ module.exports = function(){
                     
         switch(record.record.type){
             case "A":
+                value = [record.record.value[0] || "127.0.0.1"];
+                break;
+            case "AAAA":
+                value = [record.record.value[0] || "0000:0000:0000:0000:0000:0000:0000:0001"];
+                break;
             case "CNAME":
             case "NS":
                 value = [punycode.ToASCII(record.record.value[0].replace("@", records.hostname) || "")];

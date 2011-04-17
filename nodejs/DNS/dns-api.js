@@ -16,7 +16,7 @@ module.exports = dnsapi = {
 
             options = options || {};
 
-            if(zone_name.match(/[^\w\.\-\u0081-\uFFFF]/)){
+            if(zone_name.match(/[^\w\.\-\*@\u0081-\uFFFF]/)){
                 return callback(new Error("Invalid characters in name"));
             }
 
@@ -40,20 +40,22 @@ module.exports = dnsapi = {
                                 fname: options.fname || "",
                                 lname: options.lname || ""
                             },
-                            _gen: 2,
                             records: {
+                                _gen: 2,
                                 NS: [
                                     {
-                                        name: zone_name,
+                                        name: "@",
                                         ttl: 600,
                                         id: 1,
-                                        value: [default_ns[0]]
+                                        value: [default_ns[0]],
+                                        frozen: true
                                     },
                                     {
-                                        name: zone_name,
+                                        name: "@",
                                         ttl: 600,
                                         id: 2,
-                                        value: [default_ns[1]]
+                                        value: [default_ns[1]],
+                                        frozen: true
                                     }
                                 ]
                             }
@@ -254,6 +256,9 @@ module.exports = dnsapi = {
                         type = keys[j];
                         for(var i=0, len = records[type].length; i<len; i++){
                             if(records[type][i].id == Number(id)){
+                                if(records[type][i].frozen){
+                                    return callback(new Error("This record can not be removed "+JSON.stringify(records[type][i])));
+                                }
                                 records[type].splice(i,1);
                                 return this.save(zone_name, owner, records, callback);
                             }
@@ -285,11 +290,35 @@ module.exports = dnsapi = {
             }
             
             if(name.charAt(0)!="/" || name.charAt(name.length-1)!="/"){
-                if(name.match(/[^\w\.\-\*\u0081-\uFFFF]/)){
+                if(name.match(/[^\w\.\-\*@\u0081-\uFFFF]/)){
                     return callback(new Error("Invalid characters in name"));
                 }
             }
             
+            if(type=="A"){
+                if(!record.value[0].match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)){
+                    return callback(new Error("Invalid IP address"));
+                }
+            }
+            
+            if(type=="AAAA"){
+                if(!record.value[0].match(/^(?:[a-f0-9]{0,4}:){4,}[a-f0-9]{0,4}$/)){
+                    return callback(new Error("Invalid IPv6 address"));
+                }
+                var parts, needed;
+                if(record.value[0].indexOf("::")>=0){
+                    parts = record.value[0].split(":"),
+                    needed = 8-parts.length;
+                    record.value[0] = record.value[0].replace("::", Array(needed+2).join(":0")+":");
+                }
+                // zero pad left
+                parts = record.value[0].split(":");
+                for(var i=0; i<8; i++){
+                    parts[i] = Array(4 - parts[i].length + 1).join("0") + parts[i];
+                }
+                record.value[0] = parts.join(":");
+            }
+                        
             if(countries){
                 record.countries = countries;
                 record.priority += 2;
@@ -304,7 +333,7 @@ module.exports = dnsapi = {
                 if(!records){
                     return callback(null, false);
                 }
-                
+
                 if(!records._gen){
                     record.id = records._gen = 1;
                 }else{
@@ -371,7 +400,6 @@ module.exports = dnsapi = {
             }
             
             // A
-            
             data = this.check_type("A", hostname, country, zone.records, true);
             if(data.length){
                 if(type=="A" || type=="ANY"){
@@ -394,6 +422,14 @@ module.exports = dnsapi = {
                 if(data.length){
                     response.answer = response.answer.concat(data);
                     // TODO: find A as well
+                }
+            }
+            
+            // AAAA
+            if(type=="AAAA" || type=="ANY"){
+                data = this.check_type("AAAA", hostname, country, zone.records, false);
+                if(data.length){
+                    response.answer = response.answer.concat(data);
                 }
             }
             
@@ -439,6 +475,7 @@ module.exports = dnsapi = {
             for(var i=0, len = records[type].length; i<len; i++){
                 record = records[type][i];
                 record.type = type;
+                if(record.disabled)continue;
                 
                 // skip if not in allowed countries
                 if(record.countries && record.countries.indexOf(country)<0){
