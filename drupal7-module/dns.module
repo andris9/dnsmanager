@@ -115,6 +115,30 @@ function dns_user_presave(&$edit, $account, $category) {
     }
 }
 
+
+function dns_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
+    // Modification for the form with the given form ID goes here. For example, if
+    // FORM_ID is "user_register_form" this code would run only on the user
+    // registration form.
+    $form['first_name'] = array(
+        '#type' => 'textfield',
+        '#title' => t('First Name'),
+        '#size' => 80,
+        '#default_value' => $form["#user"]->data["first_name"],
+        '#description' => t('Provide Your first name'),
+        '#required' => TRUE
+    );
+    
+    $form['last_name'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Last Name'),
+        '#size' => 80,
+        '#default_value' => $form["#user"]->data["last_name"],
+        '#description' => t('Provide Your last name'),
+        '#required' => TRUE
+    );
+}
+
 function dns_domain_list(){
     global $user;
 
@@ -202,13 +226,23 @@ function dns_domain_edit(){
                 $rows = array();
                 if(is_array($block)){
                 	foreach($block as $row){
-                        $srv = array_pop($row["value"]);
-                        array_unshift($row["value"], $srv);
+                        
+                        $value = "";
+                        switch($type){
+                        	case "SRV":
+                                $value = join(" : ", $row["value"]);
+                                break;
+                            default:
+                                $srv = array_pop($row["value"]);
+                                array_unshift($row["value"], $srv);
+                                $value = join(" ", $row["value"]);
+                        }
+                        
                         $rows[] = array(
                             ++$i,
                             htmlspecialchars($row["name"]!="@"?$row["name"]:$domain),
                             intval($row["ttl"]),
-                            join(" ", $row["value"]),
+                            $value,
                             array(
                                 "data"=>$row["frozen"]?"<em>Informational</em>":l("Delete", "dns/remove-record",array(
                                     "query"=>array(
