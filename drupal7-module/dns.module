@@ -180,7 +180,7 @@ function dns_domain_edit(){
     $time_end = microtime(true);
     $time = $time_end - $time_start;
 
-    $types = array("A"=>"IPv4 address","AAAA"=>"IPv6 address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description");
+    $types = array("A"=>"IPv4 address","AAAA"=>"IPv6 address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description", "WEBFWD"=>"Web Forward");
 
     $header = array(array("data"=>"#","width"=>"30"), t("Name"), t("TTL"), t("Value"), array("data"=>"&nbsp;","width"=>"50"));
     $rows = array();
@@ -191,7 +191,8 @@ function dns_domain_edit(){
         "CNAME"=>"",
         "MX"=>"",
         "NS"=>"",
-        "SRV"=>""
+        "SRV"=>"",
+        "WEBFWD"=>""
     );
     if($data){
         
@@ -276,7 +277,7 @@ function dns_record_add_form($form, &$form_state){
     $form['general']['type'] = array(
         '#type' => 'select',
         '#title' => t('Type'),
-        '#options' => array("A"=>"IP address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description"),
+        '#options' => array("A"=>"IP address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description", "WEBFWD"=>"Web Forward"),
         '#default_value'=>"A",
         '#description' => t('Select record type'),
         '#required' => TRUE
@@ -334,7 +335,7 @@ function dns_record_add_form_validate($form, &$form_state) {
         $errors = true;
     }
 
-    if(!in_array($form_state['values']['type'], array("A", "AAAA", "CNAME", "NS", "MX", "SRV"))){
+    if(!in_array($form_state['values']['type'], array("A", "AAAA", "CNAME", "NS", "MX", "SRV", "WEBFWD"))){
         form_set_error('type', t('Type is required!'));
         $errors = true;
     }

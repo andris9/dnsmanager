@@ -7,7 +7,7 @@ var default_ns = ["ns11.node.ee", "ns22.node.ee"];
 
 module.exports = dnsapi = {
     
-    allowed_types: ["A", "AAAA", "CNAME", "MX", "NS", "SRV"],
+    allowed_types: ["A", "AAAA", "CNAME", "MX", "NS", "SRV", "WEBFWD"],
     
     zones: {
 
@@ -206,6 +206,8 @@ module.exports = dnsapi = {
             
             record.id = Number(id);
             
+            // TODO: vaja määrata tüüp, et saaks kontrollida A, AAAA jne vastavust
+            
             this.list(zone_name, owner, (function(err, records){
                 if(err){
                     return callback(err);
@@ -393,59 +395,39 @@ module.exports = dnsapi = {
     resolver: {
         
         records: function(hostname, zone, type, country, response, callback){
-            var data;
+            var data, ns_pointer = hostname;
             
             if(!zone.records){
                 return callback(null, false);
             }
             
             // A
-            data = this.check_type("A", hostname, country, zone.records, true);
+            data = this.dig_records("A", hostname, country, zone);
             if(data.length){
                 if(type=="A" || type=="ANY"){
                     response.answer = response.answer.concat(data);
                 }
             }
-            if(data.length==1 && data[0].record.type=="CNAME"){
-                data = this.check_type("A", data[0].record.value[0], country, zone.records, true);
-                if(data.length && data[0].record.type=="A"){
-                    if(type=="A" || type=="ANY"){
-                        response.answer = response.answer.concat(data);
-                    }
-                    hostname = data[0].record.name;
-                }
-            }
             
             // CNAME
             if(type=="CNAME"){
-                data = this.check_type("CNAME", hostname, country, zone.records, false);
+                data = this.dig_records("CNAME", hostname, country, zone);
                 if(data.length){
                     response.answer = response.answer.concat(data);
-                    // TODO: find A as well
                 }
             }
             
             // AAAA
             if(type=="AAAA" || type=="ANY"){
-                data = this.check_type("AAAA", hostname, country, zone.records, false);
+                data = this.dig_records("AAAA", hostname, country, zone);
                 if(data.length){
                     response.answer = response.answer.concat(data);
                 }
             }
             
-            // NS
-            data = this.check_type("NS", hostname, country, zone.records, false);
-            if(data.length){
-                if(type=="NS" || type=="ANY"){
-                    response.answer = response.answer.concat(data);
-                }else{
-                    response.authority = response.authority.concat(data);
-                }
-            }
-            
             // MX
             if(type=="MX" || type=="ANY"){
-                data = this.check_type("MX", hostname, country, zone.records, type!="ANY");
+                data = this.dig_records("MX", hostname, country, zone);
                 if(data.length){
                     response.answer = response.answer.concat(data);
                 }
@@ -453,28 +435,45 @@ module.exports = dnsapi = {
             
             // SRV
             if(type=="SRV" || type=="ANY"){
-                data = this.check_type("SRV", hostname, country, zone.records, type!="ANY");
+                data = this.dig_records("SRV", hostname, country, zone);
                 if(data.length){
                     response.answer = response.answer.concat(data);
+                }
+            }
+            
+            // NS
+            // use last A record if available instead of hostname
+            if(response.answer.length && response.answer[response.answer.length-1].record.type == "A"){
+                 ns_pointer = response.answer[response.answer.length-1].hostname || hostname;
+            }
+            if(ns_pointer || type=="ANY" || type=="NS"){
+                data = this.dig_records("NS", ns_pointer, country, zone, true);
+                if(data.length){
+                    if(type=="NS" || type=="ANY"){
+                        response.answer = response.answer.concat(data);
+                    }else{
+                        response.authority = response.authority.concat(data);
+                    }
                 }
             }
             
             callback(null, response);
         },
         
-        check_type: function(type, hostname, country, records, use_cname){
-            
-            var response = [], record, re, value, matches;
-            if(!records[type]){
-                if(!!use_cname){
-                    return this.check_type("CNAME", hostname, country, records);
-                }
-                return response;
-            }
-            
-            for(var i=0, len = records[type].length; i<len; i++){
+        dig_records: function(type, hostname, country, zone, skip_digging, hop_count){
+            var response = [], record, re, value, matches, records = zone.records, hop_host;
+
+            if(!hop_count)hop_count = 0;
+
+            hostname = this.check_internal(hostname, zone) || hostname;
+            if(!hostname)return response;
+
+            for(var i=0, len = records[type] && records[type].length || 0; i<len; i++){
+                
                 record = records[type][i];
                 record.type = type;
+                
+                // skip if disabled
                 if(record.disabled)continue;
                 
                 // skip if not in allowed countries
@@ -485,36 +484,55 @@ module.exports = dnsapi = {
                 // if direct match, include
                 if(record.name == hostname){
                     response.push({hostname: hostname, record: record});
-                    // only 1st record for CNAME
-                    if(type=="CNAME"){
-                        return response;
-                    }
                 }
                 
                 // if regexp, include first
                 if(record.regexp && !response.length){
-                    
                     try{
                         re = new RegExp(record.regexp);
                     }catch(E){
                         // on error skip
                         continue;
                     }
-                    
                     if(matches = hostname.match(re)){
                         if(record.value[0].match("\\$")){
                             record.value[0] = hostname.replace(re, record.value[0]);
                         }
+                        record.regex = true;
                         response.push({hostname: hostname, record: record});
-                        return response;
                     }
                 }
             }
             
-            if(!response.length && use_cname){
-                return this.check_type("CNAME", hostname, country, records);
+            // keep away from eternal loop, allow 5 hops
+            if(hop_count>5){
+                return response;
             }
+            
+            if(!response.length && type!="CNAME"){
+                response = this.dig_records("CNAME", hostname, country, zone, skip_digging, hop_count+1);
+            }else if(!skip_digging){
+                for(var i=0, len=response.length;i<len;i++){
+                    if(["NS","CNAME","MX"].indexOf(response[i].record.type)>=0){
+                        if(hop_host = this.check_internal(response[i].record.value[0], zone)){
+                            response = response.concat(this.dig_records("A", hop_host, country, zone, false, hop_count+1));
+                        }
+                    }
+                }
+            }
+            
             return response;
+        },
+        
+        check_internal: function(hostname, zone){
+            if(("."+hostname).substr(-(zone._id.length+1))=="."+zone._id){
+                hostname = hostname.substr(0, hostname.length - zone._id.length - 1);
+                if(!hostname){
+                    hostname = "@";
+                }
+                return hostname;
+            }
+            return hostname=="@"?"@":false;
         }
         
     },
