@@ -1,7 +1,8 @@
 var mongo = require("mongodb"),
     punycode = require("./punycode"),
     ip2country = require("./IP/ip2country"),
-    utillib = require("util");
+    utillib = require("util"),
+    crypto = require("crypto");
 
 var default_ns = ["ns11.node.ee", "ns22.node.ee"],
     forward_host = "forwarder.node.ee";
@@ -9,6 +10,60 @@ var default_ns = ["ns11.node.ee", "ns22.node.ee"],
 module.exports = dnsapi = {
     
     allowed_types: ["A", "AAAA", "CNAME", "MX", "NS", "SRV", "WEBFWD"],
+    
+    credentials: {
+        
+        create: function(user_name, user_data, callback){
+            user_name = (user_name || "").trim();
+            if(!callback && typeof user_data == "function"){
+                callback = user_data;
+                user_data = false;
+            }
+            user_data = user_data || {};
+            if(!user_name){
+                return callback(new Error("Username not specified"));
+            }
+            this.get(user_name, function(err, user){
+                if(user){
+                    return callback(new Error("Username already exists"));
+                }
+                var secret = sha1(Date.now()+user_name);
+                dnsapi.db.openCollection("credentials", function(err, collection){
+                    collection.insert({
+                        _id: user_name,
+                        secret: secret,
+                        data: user_data
+                    });
+                });
+                callback(null, {
+                    user: user_name,
+                    secret: secret
+                });
+            });
+            
+        },
+        
+        get: function(user_name, callback){
+            user_name = (user_name || "").trim();
+            dnsapi.db.openCollection("credentials", function(err, collection){
+                if(err){
+                    return callback(err);
+                }
+                collection.find({_id: user_name}, function(err, cursor){
+                    if(err){
+                        return callback(err);
+                    }
+                    cursor.toArray(function(err, users) {
+                        return callback(null, users && users[0]);
+                    });
+                });
+            });
+        },
+        
+        verify: function(user_name, secret, domain_name){
+            
+        }
+    },
     
     zones: {
 
@@ -31,6 +86,71 @@ module.exports = dnsapi = {
                         return callback(new Error("This domain name is already listed in the system"));
                     }
                 }
+                
+                if(options.default_ip && (options.default_ip = options.default_ip.trim()) && !options.default_ip.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)){
+                    return callback(new Error("Invalid IP address"));
+                }
+                
+                var records = {
+                    _gen: 2,
+                    NS: [
+                        {
+                            name: "@",
+                            ttl: 600,
+                            id: 1,
+                            value: [default_ns[0]],
+                            frozen: true
+                        },
+                        {
+                            name: "@",
+                            ttl: 600,
+                            id: 2,
+                            value: [default_ns[1]],
+                            frozen: true
+                        }
+                    ]
+                };
+                
+                if(options.default_ip){
+                    // main A record
+                    records["A"] = records["A"] || [];
+                    records["A"].push({
+                        name: "@",
+                        ttl: 60,
+                        id: ++records._gen,
+                        value: [options.default_ip]
+                    });
+                    // www CNAME record
+                    records["CNAME"] = records["CNAME"] || [];
+                    records["CNAME"].push({
+                        name: "www",
+                        ttl: 60,
+                        id: ++records._gen,
+                        value: ["@"]
+                    });
+                }
+                
+                if(options.use_ga_mx){
+                    var mx_servers = [
+                        ["aspmx.l.google.com", 10],
+                        ["alt1.aspmx.l.google.com", 20],
+                        ["alt2.aspmx.l.google.com", 20],
+                        ["aspmx2.googlemail.com", 30],
+                        ["aspmx3.googlemail.com", 30],
+                        ["aspmx4.googlemail.com", 30],
+                        ["aspmx5.googlemail.com", 30]
+                    ];
+                    records["MX"] = records["MX"] || [];
+                    for(var i=0; i<mx_servers.length; i++){
+                        records["MX"].push({
+                            name: "@",
+                            ttl: 60,
+                            id: ++records._gen,
+                            value: mx_servers[i]
+                        });
+                    }
+                }
+                
                 dnsapi.db.openCollection("zones", function(err, collection){
                     collection.insert({
                             _id: zone_name,
@@ -39,27 +159,10 @@ module.exports = dnsapi = {
                             updated: new Date(),
                             whois:{
                                 fname: options.fname || "",
-                                lname: options.lname || ""
+                                lname: options.lname || "",
+                                email: options.email || ""
                             },
-                            records: {
-                                _gen: 2,
-                                NS: [
-                                    {
-                                        name: "@",
-                                        ttl: 600,
-                                        id: 1,
-                                        value: [default_ns[0]],
-                                        frozen: true
-                                    },
-                                    {
-                                        name: "@",
-                                        ttl: 600,
-                                        id: 2,
-                                        value: [default_ns[1]],
-                                        frozen: true
-                                    }
-                                ]
-                            }
+                            records: records
                         }, function(err, docs){
                             if(err){
                                 return callback(err);
@@ -321,7 +424,9 @@ module.exports = dnsapi = {
                 }
                 record.value[0] = parts.join(":");
             }
-                        
+
+            record.value[0] = record.value[0].replace("@", zone_name);
+
             if(countries){
                 record.countries = countries;
                 record.priority += 2;
@@ -419,7 +524,7 @@ module.exports = dnsapi = {
             }
             
             // WEBFWD
-            data = this.dig_records("WEBFWD", hostname, country, zone);
+            data = this.dig_records("WEBFWD", hostname, country, zone, false);
             if(data.length){
                 if(type!="WEBFWD"){
                     data.forEach(function(record){
@@ -522,7 +627,7 @@ module.exports = dnsapi = {
                 return response;
             }
             
-            if(!response.length && type!="CNAME"){
+            if(!response.length && type!="CNAME" && type!="WEBFWD"){
                 response = this.dig_records("CNAME", hostname, country, zone, skip_digging, hop_count+1);
             }else if(!skip_digging){
                 for(var i=0, len=response.length;i<len;i++){
@@ -636,4 +741,10 @@ function normalizeRecord(name, zone_name, value){
     }
     
     return result;
+}
+
+function sha1(str){
+    var c = crypto.createHash("sha1");
+    c.update(str);
+    return c.digest("base64");
 }

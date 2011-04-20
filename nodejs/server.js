@@ -6,7 +6,7 @@ var https = require('https'),
     static_handler = require("./static"),
     punycode = require("./modules/punycode"),
     start_dns_server = require("./DNS/dns-server"),
-    start_whois_server = require("./DNS/whois-server"),
+    whois_server = require("./DNS/whois-server"),
     forwarder = require("./DNS/forwarder"),
     dns_api = require("./dnshandler");
 
@@ -21,7 +21,7 @@ process.on('uncaughtException',function(err){
 
 http.createServer(webserver).listen(80, HTTP_Ready);
 start_dns_server();
-start_whois_server();
+whois_server.start();
 
 function HTTP_Ready(err){
     if(err){
@@ -67,7 +67,7 @@ function c_webserver(req, res, data){
         return;
     }
     
-    if(req.url.match(/^\/api\/dns/)){
+    if(req.url.match(/^\/api\/(?:dns|whois)/)){
         log("access","["+Date()+"] 200 to "+ip+" from "+req.url);
         return dns_api(req, res, data);
     }

@@ -1,11 +1,12 @@
 var dnslib = require("./DNS/dns-api.js"),
-    urllib = require("url");
+    urllib = require("url"),
+    whois_server = require("./DNS/whois-server");
 
 module.exports = function(req, res, data){
         
         var url = urllib.parse(req.url, true);
         
-        if(!url.query.user){
+        if(!url.query.user && url.pathname!="/api/dns/whois"){
             return send(req, res, "Invalid user");
         }
         
@@ -21,7 +22,10 @@ module.exports = function(req, res, data){
             case "/api/dns/add":
                 add_domain(url.query.domain, url.query.user, {
                         fname: url.query.fname, 
-                        lname: url.query.lname
+                        lname: url.query.lname,
+                        email: url.query.email,
+                        default_ip: url.query.default_ip,
+                        use_ga_mx: url.query.use_ga_mx
                     }, send.bind(this, req, res));
                 break;
             case "/api/dns/remove":
@@ -35,6 +39,9 @@ module.exports = function(req, res, data){
                 break;
             case "/api/dns/remove-record":
                 remove_record(url.query.domain, url.query.user, url.query.rid, send.bind(this, req, res));
+                break;
+            case "/api/dns/whois":
+                whois_server.request(url.query.domain, send.bind(this, req, res));
                 break;
             default:
                 send(req, res, "Unknown service");

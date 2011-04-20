@@ -1,6 +1,6 @@
 var ndns = require ('./ndns-eec0a40/lib/ndns'),
     fs = require("fs"),
-    util = require("util"),
+    utillib = require("util"),
     dnsapi = require("./dns-api"),
     punycode = require("./punycode");
 

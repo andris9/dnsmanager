@@ -73,6 +73,14 @@ function dns_menu() {
         'menu_name' => 'navigation'
     );
 
+    $items['whois'] = array(
+        'title' => t('Whois'),
+        'page callback' => 'dns_whois',
+        'access arguments' => array('access content'),
+        'type' => MENU_NORMAL_ITEM,
+        'menu_name' => 'navigation'
+    );
+
     $items['dns/remove-record'] = array(
         'page callback' => 'dns_record_remove',
         'access arguments' => array('access dns'),
@@ -96,7 +104,7 @@ function dns_form_user_register_form_alter(&$form, &$form_state, $form_id) {
         '#description' => t('Provide Your first name'),
         '#required' => TRUE
     );
-    
+
     $form['last_name'] = array(
         '#type' => 'textfield',
         '#title' => t('Last Name'),
@@ -128,7 +136,7 @@ function dns_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
         '#description' => t('Provide Your first name'),
         '#required' => TRUE
     );
-    
+
     $form['last_name'] = array(
         '#type' => 'textfield',
         '#title' => t('Last Name'),
@@ -204,7 +212,7 @@ function dns_domain_edit(){
     $time_end = microtime(true);
     $time = $time_end - $time_start;
 
-    $types = array("A"=>"IPv4 address","AAAA"=>"IPv6 address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description", "WEBFWD"=>"Web Forward");
+    $types = array("A"=>"IPv4 address","AAAA"=>"IPv6 address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description", "WEBFWD"=>"Domain Rewrite");
 
     $header = array(array("data"=>"#","width"=>"30"), t("Name"), t("TTL"), t("Value"), array("data"=>"&nbsp;","width"=>"50"));
     $rows = array();
@@ -213,20 +221,20 @@ function dns_domain_edit(){
         "A"=>"",
         "AAAA"=>"",
         "CNAME"=>"",
+        "WEBFWD"=>"",
         "MX"=>"",
         "NS"=>"",
-        "SRV"=>"",
-        "WEBFWD"=>""
+        "SRV"=>""
     );
     if($data){
-        
+
         foreach($data as $type => $block){
             if(count($block)){
                 $i=0;
                 $rows = array();
                 if(is_array($block)){
                 	foreach($block as $row){
-                        
+
                         $value = "";
                         switch($type){
                         	case "SRV":
@@ -237,7 +245,7 @@ function dns_domain_edit(){
                                 array_unshift($row["value"], $srv);
                                 $value = join(" ", $row["value"]);
                         }
-                        
+
                         $rows[] = array(
                             ++$i,
                             htmlspecialchars($row["name"]!="@"?$row["name"]:$domain),
@@ -263,7 +271,7 @@ function dns_domain_edit(){
                             "header"=>$header,
                             "rows"=>$rows,
                             "attributes"=>array(),
-                            "caption"=>"<strong>{$types["$type"]} ($type)</strong> records for <strong>".htmlspecialchars($domain)."</strong>",
+                            "caption"=>"<strong>{$types["$type"]}".($type!="WEBFWD"?" ($type)":"")."</strong> records for <strong>".htmlspecialchars($domain)."</strong>",
                             "colgroups"=>array(),
                             "empty"=>t("No records added")
                         ));
@@ -311,7 +319,7 @@ function dns_record_add_form($form, &$form_state){
     $form['general']['type'] = array(
         '#type' => 'select',
         '#title' => t('Type'),
-        '#options' => array("A"=>"IP address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description", "WEBFWD"=>"Web Forward"),
+        '#options' => array("A"=>"IP address", "CNAME"=>"Domain alias", "MX"=>"Mail server", "NS"=>"Name server", "SRV"=>"Service description", "WEBFWD"=>"Domain Rewrite"),
         '#default_value'=>"A",
         '#description' => t('Select record type'),
         '#required' => TRUE
@@ -338,7 +346,7 @@ function dns_record_add_form($form, &$form_state){
         '#type' => 'textfield',
         '#title' => t('Value'),
         '#size' => 80,
-        '#description' => t('Value, for example <strong>127.0.0.1</strong> or an IPv6 address.'),
+        '#description' => t('Value, for example <strong>127.0.0.1</strong> or an IPv6 address. Use <b>full hostname</b> for CNAME, MX etc. or <b>@</b>'),
         '#required' => TRUE
     );
 
@@ -375,28 +383,28 @@ function dns_record_add_form_validate($form, &$form_state) {
     }
 
     mb_regex_encoding('UTF-8');
-    
+
     $name = trim($form_state['values']['name']);
     if(substr($name,0,1)!="/" || substr($name,-1)!="/"){
         if(mb_ereg_match(".*[^[:alnum:]\.\-\*_@]", $name)){
             form_set_error('name', t('Name includes illegal characters!'));
             $errors = true;
-        }	
+        }
     }
-    
+
     $value = trim($form_state['values']['value']);
     if(mb_ereg_match('.*[^[:alnum:]\.\-\*\:\$@]', $value)){
         form_set_error('value', t('Value includes illegal characters!'));
         $errors = true;
     }
-    
-    $type = strtoupper(trim($form_state['values']['type'])); 
+
+    $type = strtoupper(trim($form_state['values']['type']));
     if($type=="A"){
         //.match(/^(?:[a-f0-9]{0,4}:){4,}[a-f0-9]{0,4}$/)
         $value = strtolower($value);
         $ip4 = $ip6 = false;
-        
-        if(!($ip4 = !!preg_match('/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $value)) && 
+
+        if(!($ip4 = !!preg_match('/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $value)) &&
            !($ip6 = !!preg_match('/^(?:[a-f0-9]{0,4}:){4,}[a-f0-9]{0,4}$/', $value))){
                 form_set_error('value', t('Invalid IP address'));
                 $errors = true;
@@ -405,7 +413,7 @@ function dns_record_add_form_validate($form, &$form_state) {
         	$type="AAAA";
         }
     }
-    
+
     $ttl = abs(intval(trim($form_state['values']['ttl'])));
 
     $record = array(
@@ -426,7 +434,7 @@ function dns_record_add_form_validate($form, &$form_state) {
             if($response["status"]!="OK" || !$response["data"]){
                 form_set_error(null, $response["errormsg"]?$response["errormsg"]:t('Error saving data'));
             }
-    
+
         }else{
             form_set_error(null, t('Error connecting to server'));
         }
@@ -470,13 +478,67 @@ function dns_record_remove(){
 }
 
 function dns_domain_add_form($form, &$form_state){
-    $form['dns_domain_name'] = array(
+    global $user;
+
+    $form['general'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Zone info')
+    );
+
+    $form['general']['dns_domain_name'] = array(
         '#type' => 'textfield',
         '#title' => t('Zone name'),
         '#size' => 80,
-        '#description' => t('The name of the zone (domain), unicode characters are allowed'),
+        '#description' => t('The name of the domain (without <em>www</em>), example: <em>bookweed.com</em>, unicode characters are allowed'),
         '#required' => TRUE
     );
+
+    $form['general']['dns_default_ip'] = array(
+        '#type' => 'textfield',
+        '#title' => t('IP'),
+        '#size' => 80,
+        '#description' => t('IP for the domain (optional)'),
+        '#required' => FALSE
+    );
+
+    $form['general']['dns_ga_mx'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Use <a href="http://www.google.com/apps/intl/en/group/index.html" target="_blank">Google Apps</a> e-mail servers (optional)'),
+        '#description' => t('Set up MX records pointing to Google Apps <a href="https://www.google.com/a/cpanel/kreata.ee/SetupMXInstructions">e-mail servers</a>')
+    );
+
+
+
+    $form['contacts'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Contact information'),
+        '#description' => t('Public contact information for this domain')
+    );
+
+    $form['contacts']['fname'] = array(
+        '#type' => 'textfield',
+        '#title' => t('First name'),
+        '#default_value' =>$user->data["first_name"],
+        '#size' => 80,
+        '#required' => TRUE
+    );
+
+    $form['contacts']['lname'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Last name'),
+        '#default_value' =>$user->data["last_name"],
+        '#size' => 80,
+        '#required' => TRUE
+    );
+
+    $form['contacts']['email'] = array(
+        '#type' => 'textfield',
+        '#title' => t('E-mail address'),
+        '#default_value' =>$user->mail,
+        '#size' => 80,
+        '#required' => TRUE
+    );
+
 
     $form['submit'] = array(
         '#type' => 'submit',
@@ -491,20 +553,48 @@ function dns_domain_add_form_validate($form, &$form_state) {
 
     $errors = false;
     $domain = mb_strtolower(trim($form_state['values']['dns_domain_name']));
+    $default_ip = mb_strtolower(trim($form_state['values']['dns_default_ip']));
+    $use_ga_mx = $form_state['values']['dns_ga_mx'];
+    $fname = trim($form_state['values']['fname']);
+    $lname = trim($form_state['values']['lname']);
+    $email = trim($form_state['values']['email']);
+
 
     if(!$domain){
         form_set_error('dns_domain_name', t('Required field!'));
         $errors = true;
     }
-    
+
+    if(!$fname){
+        form_set_error('fname', t('Required field!'));
+        $errors = true;
+    }
+
+    if(!$lname){
+        form_set_error('lname', t('Required field!'));
+        $errors = true;
+    }
+
     mb_regex_encoding('UTF-8');
     if(mb_ereg_match(".*[^[:alnum:]\.\-]", $domain)){
     	form_set_error('dns_domain_name', t('Domain name includes illegal characters!'));
         $errors = true;
     }
-    
+
+    if($default_ip && !preg_match('/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $default_ip)){
+    	form_set_error('dns_default_ip', t('Invalid IP address!'));
+        $errors = true;
+    }
+
     if(!$errors){
-        if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/add?user=".urlencode($user->name)."&fname=".urlencode($user->data["first_name"])."&lname=".urlencode($user->data["last_name"])."&domain=".urlencode($domain))){
+        if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/add?user=".urlencode($user->name).
+                    "&fname=".urlencode($fname).
+                    "&lname=".urlencode($lname).
+                    "&email=".urlencode($email).
+                    "&domain=".urlencode($domain).
+                    "&default_ip=".urlencode($default_ip).
+                    "&use_ga_mx=".urlencode($use_ga_mx?"true":"")
+                )){
             $response = @json_decode($data, true);
             if($response["status"]!="OK" || !$response["data"]){
                 form_set_error('dns_domain_name', $response["errormsg"]?$response["errormsg"]:t('This domain name is already listed on the system'));
@@ -561,6 +651,68 @@ function load_domains(){
         $response = @json_decode($data, true);
         if($response["status"]=="OK" && $response["data"]){
             return $response["data"];
+        }
+    }
+
+    return false;
+}
+
+function dns_whois(){
+	return theme_form(array(
+        "element"=>array(
+            "#method"=>"get",
+            "#action"=>url("whois"),
+            "#children"=>theme_fieldset(array(
+                "element"=>array(
+                    "#title"=>"Search for domain",
+                    "#description"=>"Search from a whois server <em>whois.node.ee</em>",
+                    "#children" => theme_textfield(array(
+                        "element"=>array(
+                            "#name"=>"domain",
+                            "#title"=>"Domain name",
+                            "#value"=>$_GET["domain"],
+                            "#size"=>105
+                        )
+                    )).theme_button(array(
+                        "element"=>array(
+                            "#button_type"=>"submit",
+                            "#name"=>"Search",
+                            "#value"=>"Search"
+                        )
+                    )).theme_button(array(
+                        "element"=>array(
+                            "#button_type"=>"submit",
+                            "#submit"=>false,
+                            "#name"=>"Reset",
+                            "#value"=>"Reset",
+                            "#attributes"=>array(
+                                "onclick"=>"window.location.href='".url("whois")."';return false;"
+                            )
+                        )
+                    ))
+                )
+            )).dns_check_whois()
+        )
+    ));
+}
+
+function dns_check_whois(){
+    global $user;
+
+    $domain = mb_strtolower(trim($_GET["domain"]));
+    if(!$domain)return "";
+
+
+
+    if($data = load_from_url(variable_get('dns_api_access_point', "http://node.ee/api/dns")."/whois?domain=".urlencode($domain))){
+        $response = @json_decode($data, true);
+        if($response["status"]=="OK" && $response["data"]){
+            return theme_fieldset(array(
+                "element"=>array(
+                    "#title"=>"Results",
+                    "#children"=>"<pre>".$response["data"]."</pre>"
+                )
+            ));
         }
     }
 

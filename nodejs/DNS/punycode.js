@@ -296,11 +296,13 @@ module.exports = new function Punycode() {
         var out = [];
         for (var i=0; i < domain_array.length; ++i) {
             var s = domain_array[i];
-            out.push(
-                s.match(/[^A-Za-z0-9-]/) ?
-                "xn--" + this.encode(s) :
-                s
-            );
+            try{
+                out.push(
+                    s.match(/[^A-Za-z0-9-]/) ?
+                    "xn--" + this.encode(s) :
+                    s
+                );
+            }catch(E){out.push(s);}
         }
         return out.join(".");
     }).bind(this);
@@ -310,11 +312,13 @@ module.exports = new function Punycode() {
         var out = [];
         for (var i=0; i < domain_array.length; ++i) {
             var s = domain_array[i];
-            out.push(
-                s.match(/^xn--/) ?
-                this.decode(s.slice(4)) :
-                s
-            );
+            try{
+                out.push(
+                    s.match(/^xn--/) ?
+                    this.decode(s.slice(4)) :
+                    s
+                );
+            }catch(E){out.push(s);}
         }
         return out.join(".");
     }).bind(this);
